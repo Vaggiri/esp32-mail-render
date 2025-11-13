@@ -30,7 +30,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 async function sendMail(data) {
   try {
     const result = await resend.emails.send({
-      from: "ESP32 Health Monitor <alerts@esp32mail.dev>",
+      from: "ESP32 Health Monitor <onboarding@resend.dev>",
       to: data.to,
       subject: data.subject,
       text: data.body

@@ -1,49 +1,46 @@
 import admin from "firebase-admin";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-// FIREBASE CONFIG FROM ENV VAR
+// ------- FIREBASE CONFIG FROM ENV -------
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+const databaseURL = process.env.FIREBASE_DB_URL;
 
-// Initialize Firebase Admin SDK
+// ------- MAIL CONFIG -------
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Initialize Firebase
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: process.env.FIREBASE_DB_URL
+  databaseURL: databaseURL
 });
 
-// Realtime Database reference
 const db = admin.database();
 const mailRef = db.ref("/mail");
 
-// Gmail SMTP transport
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_PASS
-  }
-});
-
-async function processMail(data) {
-  if (!data || !data.to || !data.subject || !data.body) return;
-
-  const mailOptions = {
-    from: `"ESP32 Health Monitor" <${process.env.GMAIL_USER}>`,
-    to: data.to,
-    subject: data.subject,
-    text: data.body,
-  };
-
+// Send mail using Resend
+async function sendMail(data) {
   try {
-    await transporter.sendMail(mailOptions);
-    console.log("✅ Email sent to:", data.to);
+    const result = await resend.emails.send({
+      from: "ESP32 Health Monitor <alerts@esp32mail.dev>",
+      to: data.to,
+      subject: data.subject,
+      text: data.body
+    });
+
+    console.log("✅ Email sent:", result.id);
     await mailRef.remove();
   } catch (err) {
-    console.error("❌ Error sending email:", err);
+    console.error("❌ Email error:", err);
   }
 }
 
-console.log("🔥 Render server active — listening for /mail changes...");
+console.log("🔥 Render server online — watching /mail...");
+
+// Listen for new mail node
 mailRef.on("value", async (snap) => {
   const data = snap.val();
-  if (data) await processMail(data);
+  if (data && data.to && data.subject && data.body) {
+    console.log("📨 Mail triggered:", data);
+    await sendMail(data);
+  }
 });

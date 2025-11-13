@@ -1,23 +1,32 @@
 import admin from "firebase-admin";
 import { Resend } from "resend";
+import http from "http";
 
-// ------- FIREBASE CONFIG FROM ENV -------
+// -------- HTTP SERVER FOR RENDER --------
+const PORT = process.env.PORT || 3000;
+
+http.createServer((req, res) => {
+  res.writeHead(200, {"Content-Type": "text/plain"});
+  res.end("ESP32 Mail Listener is running\n");
+}).listen(PORT, () => {
+  console.log(`🚀 Web server running on port ${PORT}`);
+});
+
+// -------- FIREBASE CONFIG --------
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-const databaseURL = process.env.FIREBASE_DB_URL;
 
-// ------- MAIL CONFIG -------
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-// Initialize Firebase
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: databaseURL
+  databaseURL: process.env.FIREBASE_DB_URL
 });
 
 const db = admin.database();
 const mailRef = db.ref("/mail");
 
-// Send mail using Resend
+// -------- RESEND MAIL CONFIG --------
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// -------- SEND EMAIL --------
 async function sendMail(data) {
   try {
     const result = await resend.emails.send({
@@ -27,7 +36,7 @@ async function sendMail(data) {
       text: data.body
     });
 
-    console.log("✅ Email sent:", result.id);
+    console.log("✅ Email sent:", result);
     await mailRef.remove();
   } catch (err) {
     console.error("❌ Email error:", err);
@@ -36,7 +45,7 @@ async function sendMail(data) {
 
 console.log("🔥 Render server online — watching /mail...");
 
-// Listen for new mail node
+// -------- FIREBASE LISTENER --------
 mailRef.on("value", async (snap) => {
   const data = snap.val();
   if (data && data.to && data.subject && data.body) {
